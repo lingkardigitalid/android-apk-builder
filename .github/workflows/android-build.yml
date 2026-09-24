@@ -1,62 +1,45 @@
 name: Android Build
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Cache Gradle packages
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      - name: Download gradle-wrapper.jar
+        run: |
+          mkdir -p gradle/wrapper
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradle/wrapper/gradle-wrapper.jar
+          ls -la gradle/wrapper/
 
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug --stacktrace
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
 
-    - name: Build Release APK
-      run: ./gradlew assembleRelease
-
-    - name: Upload Debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
-
-    - name: Upload Build Reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: build-reports
-        path: app/build/reports/
+      - name: Upload Build Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-reports
+          path: app/build/reports/
