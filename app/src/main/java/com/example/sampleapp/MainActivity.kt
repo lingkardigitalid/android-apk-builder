@@ -1,7 +1,11 @@
 package com.example.sampleapp
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.os.Bundle
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
-        
+
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -25,8 +29,24 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = true
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        settings.setGeolocationEnabled(true)
 
         webView.webViewClient = WebViewClient()
+
+        // KUNCI FIX: Ijinkan WebView akses kamera & mic
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request?.grant(request.resources)
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                return false
+            }
+        }
 
         webView.loadUrl("https://snaplink.site/niom/kasir/index.php")
     }
