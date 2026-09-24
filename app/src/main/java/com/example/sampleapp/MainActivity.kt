@@ -1,29 +1,41 @@
 package com.example.sampleapp
 
-import androidx.appcompat.app.AppCompatActivity
+import android.annotation.SuppressLint
 import android.os.Bundle
-import android.widget.Button
-import android.widget.TextView
-import android.widget.Toast
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
-    private var clickCount = 0
 
+    private lateinit var webView: WebView
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val welcomeText = findViewById<TextView>(R.id.welcomeText)
-        val clickButton = findViewById<Button>(R.id.clickButton)
-        val countText = findViewById<TextView>(R.id.countText)
+        webView = findViewById(R.id.webView)
+        
+        val settings: WebSettings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        settings.allowFileAccess = true
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
 
-        clickButton.setOnClickListener {
-            clickCount++
-            countText.text = "Button clicked $clickCount times"
-            
-            if (clickCount % 5 == 0) {
-                Toast.makeText(this, "Wow! You've clicked $clickCount times!", Toast.LENGTH_SHORT).show()
-            }
+        webView.webViewClient = WebViewClient()
+
+        webView.loadUrl("https://snaplink.site/niom/kasir/index.php")
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 }
