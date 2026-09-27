@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -15,16 +17,17 @@ import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import android.webkit.JavascriptInterface
-import android.content.Context
 import com.google.firebase.messaging.FirebaseMessaging
-import androidx.core.app.NotificationManagerCompat
+import android.content.Context
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val CAMERA_PERMISSION_CODE = 100
     private val NOTIF_PERMISSION_CODE = 200
+
+    // Cache token di memory — biar JS bisa ambil kapan saja tanpa blocking
+    private var cachedFcmToken: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +36,9 @@ class MainActivity : AppCompatActivity() {
 
         requestCameraPermission()
         requestNotificationPermission()
+
+        // PREFETCH FCM Token di background (non-blocking)
+        prefetchFcmToken()
 
         webView = findViewById(R.id.webView)
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
@@ -64,6 +70,25 @@ class MainActivity : AppCompatActivity() {
         handleNotificationIntent(intent)
     }
 
+    // ============================================
+    // FCM TOKEN PREFETCH (NON-BLOCKING)
+    // ============================================
+    private fun prefetchFcmToken() {
+        try {
+            FirebaseMessaging.getInstance().token
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        cachedFcmToken = task.result ?: ""
+                        Log.d("FCM_TOKEN", "Token cached: ${cachedFcmToken.take(30)}...")
+                    } else {
+                        Log.w("FCM_TOKEN", "Failed to get token", task.exception)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("FCM_TOKEN", "Prefetch error", e)
+        }
+    }
+
     private fun requestCameraPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val camera = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -92,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-        private fun handleNotificationIntent(intent: android.content.Intent?) {
+    private fun handleNotificationIntent(intent: android.content.Intent?) {
         val url = intent?.getStringExtra("notification_url")
         if (!url.isNullOrEmpty()) {
             val baseUrl = getString(R.string.webview_base)
@@ -101,20 +126,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ============================================
+    // JS BRIDGE — TIDAK BLOCKING
+    // ============================================
     inner class WebAppInterface(private val context: Context) {
+
         @JavascriptInterface
         fun getFCMToken(): String {
-            var result = ""
-            try {
-                val latch = java.util.concurrent.CountDownLatch(1)
-                FirebaseMessaging.getInstance().token
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful) result = task.result
-                        latch.countDown()
-                    }
-                latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
-            } catch (e: Exception) { result = "" }
-            return result
+            // Langsung return cache — tidak block!
+            // Kalau kosong, JS akan retry otomatis (lihat fcm-client.js)
+            return cachedFcmToken
         }
 
         @JavascriptInterface
