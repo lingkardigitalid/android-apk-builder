@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "693493417511",
+    "project_id": "niom-membership",
+    "storage_bucket": "niom-membership.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:693493417511:android:5ffdf338c01f92d27eb002",
+        "android_client_info": {
+          "package_name": "id.lingkardigital.niokasir"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRaVssiIZL1UPkr7DbMchjdLS40mhM_dI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
