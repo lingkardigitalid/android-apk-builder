@@ -1,4 +1,4 @@
-package com.example.sampleapp
+package id.lingkardigital.niokasir
 
 import android.Manifest
 import android.annotation.SuppressLint
