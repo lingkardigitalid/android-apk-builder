@@ -3,4 +3,7 @@
     <string name="welcome_message">NIO Kasir</string>
     <string name="click_me">Click Me!</string>
     <string name="initial_count">Button clicked 0 times</string>
+    <string name="default_notification_channel_id">nio_kasir_channel</string>
+    <string name="webview_url">https://snaplink.site/niom/kasir/index.php</string>
+    <string name="webview_base">https://snaplink.site/niom/kasir/</string>
 </resources>
