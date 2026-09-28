@@ -17,7 +17,6 @@ import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.messaging.FirebaseMessaging
 import android.content.Context
 
 class MainActivity : AppCompatActivity() {
@@ -34,7 +33,14 @@ class MainActivity : AppCompatActivity() {
 
         requestCameraPermission()
         requestNotificationPermission()
-        prefetchFcmToken()
+
+        // Init Firebase dengan try-catch — biar kalau gagal, app tidak crash
+        try {
+            com.google.firebase.FirebaseApp.initializeApp(this)
+            prefetchFcmToken()
+        } catch (e: Exception) {
+            Log.e("FIREBASE_INIT", "Firebase init failed", e)
+        }
 
         webView = findViewById(R.id.webView)
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
@@ -62,7 +68,6 @@ class MainActivity : AppCompatActivity() {
             ): Boolean = false
         }
 
-        // Load URL — hanya 1x
         val notifUrl = intent?.getStringExtra("notification_url")
         val targetUrl = if (!notifUrl.isNullOrEmpty()) {
             val baseUrl = getString(R.string.webview_base)
@@ -75,7 +80,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun prefetchFcmToken() {
         try {
-            FirebaseMessaging.getInstance().token
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
                         cachedFcmToken = task.result ?: ""
