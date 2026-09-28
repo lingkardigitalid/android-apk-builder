@@ -7,12 +7,15 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -65,8 +68,10 @@ class MainActivity : AppCompatActivity() {
         }
         webView.loadUrl(targetUrl)
 
-        // Start background service untuk notifikasi real-time
         startNotificationService()
+
+        // Minta pengecualian battery optimization (sekali saja)
+        requestBatteryOptimizationExemption()
     }
 
     private fun startNotificationService() {
@@ -79,6 +84,54 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             android.util.Log.e("NIO_SERVICE", "Failed to start service", e)
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+
+        try {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            val pkg = packageName
+
+            if (pm.isIgnoringBatteryOptimizations(pkg)) {
+                // Sudah exempted
+                return
+            }
+
+            // Cek apakah pernah ditanya (biar tidak spam)
+            val prefs = getSharedPreferences("nio_prefs", MODE_PRIVATE)
+            val asked = prefs.getBoolean("battery_asked", false)
+            if (asked) return
+
+            AlertDialog.Builder(this)
+                .setTitle("Aktifkan Notifikasi Real-time")
+                .setMessage(
+                    "Supaya notifikasi member baru tetap masuk walau aplikasi ditutup, " +
+                    "NIO Kasir butuh pengecualian dari optimasi baterai.\n\n" +
+                    "Klik OK, lalu pilih 'Izinkan' / 'Allow'."
+                )
+                .setPositiveButton("OK") { _, _ ->
+                    prefs.edit().putBoolean("battery_asked", true).apply()
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$pkg")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        // Fallback: buka settings battery optimization umum
+                        try {
+                            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        } catch (e2: Exception) {}
+                    }
+                }
+                .setNegativeButton("Nanti") { _, _ ->
+                    prefs.edit().putBoolean("battery_asked", true).apply()
+                }
+                .show()
+
+        } catch (e: Exception) {
+            android.util.Log.e("NIO_BATTERY", "Request exemption failed", e)
         }
     }
 

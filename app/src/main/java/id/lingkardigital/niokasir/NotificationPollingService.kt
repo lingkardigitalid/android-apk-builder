@@ -1,14 +1,17 @@
 package id.lingkardigital.niokasir
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.CookieManager
 import androidx.core.app.NotificationCompat
@@ -39,6 +42,7 @@ class NotificationPollingService : Service() {
         private const val BASE_URL = "https://snaplink.site/niom/"
         private const val API_URL = BASE_URL + "api/v1/check-notifications.php"
         private const val COOKIE_DOMAIN = "https://snaplink.site/niom/"
+        private const val RESTART_DELAY_MS = 3000L
     }
 
     override fun onCreate() {
@@ -50,21 +54,72 @@ class NotificationPollingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand")
+        // START_STICKY: restart otomatis kalau dibunuh
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Dipanggil saat user swipe app dari recent
+        Log.d(TAG, "onTaskRemoved — schedule restart")
+
+        // Schedule restart via AlarmManager
+        try {
+            val restartIntent = Intent(applicationContext, ServiceRestartReceiver::class.java).apply {
+                action = "id.lingkardigital.niokasir.RESTART_SERVICE"
+            }
+
+            val pi = PendingIntent.getBroadcast(
+                applicationContext,
+                1,
+                restartIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.set(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + RESTART_DELAY_MS,
+                pi
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Schedule restart failed", e)
+        }
+
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
-        Log.d(TAG, "Service destroyed")
+        Log.d(TAG, "Service destroyed — schedule restart")
         pollJob?.cancel()
         scope.cancel()
+
+        // Coba restart via Alarm
+        try {
+            val restartIntent = Intent(applicationContext, ServiceRestartReceiver::class.java).apply {
+                action = "id.lingkardigital.niokasir.RESTART_SERVICE"
+            }
+            val pi = PendingIntent.getBroadcast(
+                applicationContext,
+                1,
+                restartIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.set(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + RESTART_DELAY_MS,
+                pi
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Restart on destroy failed", e)
+        }
+
         super.onDestroy()
     }
 
-    // ============================================
-    // CHANNELS
-    // ============================================
     private fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(NotificationManager::class.java)
@@ -90,9 +145,6 @@ class NotificationPollingService : Service() {
         }
     }
 
-    // ============================================
-    // FOREGROUND SERVICE NOTIFICATION
-    // ============================================
     private fun buildServiceNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pi = PendingIntent.getActivity(
@@ -110,9 +162,6 @@ class NotificationPollingService : Service() {
             .build()
     }
 
-    // ============================================
-    // POLLING
-    // ============================================
     private fun startPolling() {
         pollJob = scope.launch {
             while (isActive) {
@@ -164,7 +213,6 @@ class NotificationPollingService : Service() {
 
             if (lastNotifId == 0L) {
                 lastNotifId = newLastId
-                Log.d(TAG, "First sync, lastId=$lastNotifId")
                 return
             }
 
@@ -187,9 +235,6 @@ class NotificationPollingService : Service() {
         }
     }
 
-    // ============================================
-    // SHOW NOTIFICATION
-    // ============================================
     private fun showNotification(title: String, body: String, link: String, id: Long) {
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
