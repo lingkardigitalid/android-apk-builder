@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -15,11 +17,15 @@ import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
+import android.content.Context
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val CAMERA_PERMISSION_CODE = 100
+    private val NOTIF_PERMISSION_CODE = 200
+    private var cachedFcmToken: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,8 +33,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         requestCameraPermission()
+        requestNotificationPermission()
+        prefetchFcmToken()
 
         webView = findViewById(R.id.webView)
+        webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
@@ -53,7 +62,31 @@ class MainActivity : AppCompatActivity() {
             ): Boolean = false
         }
 
-        webView.loadUrl(getString(R.string.webview_url))
+        // Load URL — hanya 1x
+        val notifUrl = intent?.getStringExtra("notification_url")
+        val targetUrl = if (!notifUrl.isNullOrEmpty()) {
+            val baseUrl = getString(R.string.webview_base)
+            if (notifUrl.startsWith("http")) notifUrl else "$baseUrl$notifUrl"
+        } else {
+            getString(R.string.webview_url)
+        }
+        webView.loadUrl(targetUrl)
+    }
+
+    private fun prefetchFcmToken() {
+        try {
+            FirebaseMessaging.getInstance().token
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        cachedFcmToken = task.result ?: ""
+                        Log.d("FCM_TOKEN", "Cached: ${cachedFcmToken.take(30)}...")
+                    } else {
+                        Log.w("FCM_TOKEN", "Failed", task.exception)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("FCM_TOKEN", "Prefetch error", e)
+        }
     }
 
     private fun requestCameraPermission() {
@@ -69,6 +102,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    NOTIF_PERMISSION_CODE
+                )
+            }
+        }
+    }
+
+    inner class WebAppInterface(private val context: Context) {
+        @JavascriptInterface
+        fun getFCMToken(): String = cachedFcmToken
+
+        @JavascriptInterface
+        fun requestNotificationPermission() {
+            (context as? android.app.Activity)?.let {
+                it.runOnUiThread { requestNotificationPermission() }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val url = intent.getStringExtra("notification_url")
+        if (!url.isNullOrEmpty() && ::webView.isInitialized) {
+            val baseUrl = getString(R.string.webview_base)
+            val targetUrl = if (url.startsWith("http")) url else "$baseUrl$url"
+            webView.loadUrl(targetUrl)
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -78,7 +149,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack()
-        else super.onBackPressed()
+        if (::webView.isInitialized && webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
     }
 }
