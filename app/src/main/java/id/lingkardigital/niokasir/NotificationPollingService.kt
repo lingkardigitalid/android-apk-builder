@@ -1,5 +1,6 @@
 package id.lingkardigital.niokasir
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -15,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -48,7 +50,6 @@ class NotificationPollingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Restart kalau dibunuh sistem
         return START_STICKY
     }
 
@@ -92,7 +93,7 @@ class NotificationPollingService : Service() {
     // ============================================
     // FOREGROUND SERVICE NOTIFICATION
     // ============================================
-    private fun buildServiceNotification(): android.app.Notification {
+    private fun buildServiceNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pi = PendingIntent.getActivity(
             this, 0, intent,
@@ -129,7 +130,6 @@ class NotificationPollingService : Service() {
         val url = URL("$API_URL?since_id=$lastNotifId")
         val conn = url.openConnection() as HttpURLConnection
 
-        // Inject cookie dari WebView
         try {
             val cookie = CookieManager.getInstance().getCookie(COOKIE_DOMAIN)
             if (!cookie.isNullOrEmpty()) {
@@ -162,7 +162,6 @@ class NotificationPollingService : Service() {
 
             Log.d(TAG, "Got ${items.length()} items, lastId=$newLastId")
 
-            // First load: skip semua, cuma set last id
             if (lastNotifId == 0L) {
                 lastNotifId = newLastId
                 Log.d(TAG, "First sync, lastId=$lastNotifId")
